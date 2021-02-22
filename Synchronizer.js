@@ -1,6 +1,12 @@
+
+const rCacheFname = 'RmCache.json';
+
+const rDeviceTokenKey = "__REMARKABLE_DEVICE_TOKEN__";
+const rDeviceIdKey = "__REMARKABLE_DEVICE_ID__";
+const availableModes = ["mirror", "update"];
+
 // https://stackoverflow.com/questions/23013573/swap-key-with-value-json/54207992#54207992
 const reverseDict = (o, r = {}) => Object.keys(o).map(x => r[o[x]] = x) && r;
-
 
 // https://github.com/30-seconds/30-seconds-of-code/blob/master/snippets/chunk.md
 const chunk = (arr, size) =>
@@ -27,9 +33,61 @@ const isUUID = (uuid) => {
   return re.test(uuid)
 }
 
-const rDeviceTokenKey = "__REMARKABLE_DEVICE_TOKEN__";
-const rDeviceIdKey = "__REMARKABLE_DEVICE_ID__";
-const availableModes = ["mirror", "update"];
+// Update blob (Blob) or create in parentFolder (GDFolder)
+function _updateOrCreate(parentFolder, blob) {
+  let identicalNameFiles = parentFolder.searchFiles(
+    `title = '${blob.getName()}'`);
+  let currentFile;
+  if (identicalNameFiles.hasNext()) {
+    currentFile = identicalNameFiles.next();
+    Drive.Files.update({
+      title: currentFile.getName(),
+      mimeType: currentFile.getMimeType()
+    }, currentFile.getId(), blob);
+  } else {
+    currentFile = DriveApp.createFile(blob);
+    currentFile.moveTo(parentFolder);
+  }
+  return currentFile;
+}
+
+function _ensureFile(fname, folder) {
+  let iter = folder.getFilesByName(fname);
+  if (iter.hasNext()) {
+    return iter.next();
+  } else {
+    return DriveApp
+      .createFile(srcFname, JSON.stringify([]))
+      .moveTo(folder);
+  }
+}
+
+function _listToIdDict(gdFile) {
+  let cache = {};
+  let cList = JSON.parse(gdFile.getBlob().getDataAsString());
+  for (var doc of cList) {
+    cache[doc.ID] = doc;
+  }
+  return cache;
+}
+
+class Cache {
+  constructor(srcFname, folder) {
+    this.folder = folder;
+    this.file = _ensureFile(srcFname, folder);
+    this.cache = _listToIdDict(this.file);
+  }
+  
+  save(rDocList) {
+    let cacheBlob = Utilities.newBlob(JSON.stringify(rDocList));
+    this.file = Drive.Files.update({
+      title: this.file.getName(),
+      mimeType: this.file.getMimeType()
+    }, this.file.getId(), cacheBlob);
+    this.cache = _listToIdDict(this.file);
+    return this.file;
+  }
+}
 
 /*  Main work here. Walks Google Drive then uploads 
  folder and files to Remarkable cloud storage. Currently
@@ -100,7 +158,7 @@ class Synchronizer {
     }
 
     // prep some common vars
-    this.rDocList = this.rApiClient.listDocs();
+    this.rDocList = this.rApiClient.listDocs(/*docUuid4=*/ null, /*withBlob=*/ true);
     Logger.log(`Found ${this.rDocList.length} items in Remarkable Cloud`);
 
     // for debugging - dump doc list as json in root google drive folder
@@ -265,6 +323,37 @@ class Synchronizer {
     return collected.filter(x => x !== this.rRootFolderId);
   }
 
+  // Cache examples to a JSON file; download zips for all updated `.bin`s.
+  downloadUpdates(cacheInfo, rDocList) {  
+    for (let rDoc of rDocList) {
+      // TODO(tk) not sure what !Success means in RM response.
+      if (!rDoc.Success || rDoc.Type != 'DocumentType')
+        continue;
+      let cachedDoc = cacheInfo.cache[rDoc.ID];
+      // TODO(tk) default behavior is to download if no cached doc present.
+      // TODO(tk) also would be useful to notice file move on RM?
+      // Something like: this.UUIDToGdId[cachedDoc.Parent] -> old
+      if (!cachedDoc || rDoc.Version > cachedDoc.Version) {
+        Logger.info(
+          `Downloading blob update for file 
+          ${rDoc.VissibleName} (v${rDoc.Version})...`);
+
+        let gdParentId = this.UUIDToGdId[rDoc.Parent];
+        let parentFolder = gdParentId
+          ? DriveApp.getFolderById(gdParentId)
+          : this.gdFolder;
+        let blob = this.rApiClient.downloadBlob(rDoc);
+        let currentFile = _updateOrCreateBlob(parentFolder, blob);
+        
+        Drive.Properties.insert({
+          key: 'Version',
+          value: rDoc.Version,
+          visibility: 'PRIVATE'
+        }, currentFile.getId());
+      }
+    }
+  }
+
   run() {
     try {
       // store all objects in this
@@ -282,12 +371,13 @@ class Synchronizer {
       this.userProps.setProperties(this.gdIdToUUID);
       
       let rDescIds = new Set(this.rAllDescendantIds());
-
-      // remove files from device no longer in google drive
+      let diff = new Set();
+      
+      Logger.log(`In ${this.syncMode} mode.`); 
       if (this.syncMode === "mirror") {
-        Logger.log("In mirror mode. Will delete files on Remarkable not on Google Drive.");
+        Logger.log("Deleting files on Remarkable not on Google Drive.");
         let gdIds = new Set(this.uploadDocList.map((r) => r.ID));
-        let diff = rDescIds.difference(gdIds);
+        diff = rDescIds.difference(gdIds);
         let deleteList = this.rDocList.filter((r) => diff.has(r.ID));
         deleteList.forEach((r) => {
           Logger.log(`Adding for deletion: ${r["VissibleName"]}`);
@@ -296,6 +386,16 @@ class Synchronizer {
           Logger.log(`Deleting ${deleteList.length} docs that no longer exist in Google Drive`);
           this.rApiClient.delete(deleteList);
         }
+      }
+      
+      try {
+        Logger.log('Downloading updates from ReMarkable.');
+        let cacheInfo = new Cache(rCacheFname, this.gdFolder);
+        let nonDeleteList = this.rDocList.filter(r => !diff.has(r.ID));
+        this.downloadUpdates(cacheInfo, nonDeleteList);
+        cacheInfo.save(rDocList);
+      } catch (err) {
+        Logger.log(`Download failed with err ${err}.`);
       }
 
       // filter those that need update
