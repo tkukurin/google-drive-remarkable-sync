@@ -40,5 +40,4 @@ That should be it!
 
 # Limitations
 
-* This is a one way sync from Google Drive to Remarkable.
 * Files greater than 50MB in size are not transferred. This appears to be a limit set by reMarkable. 
