@@ -73,7 +73,7 @@ class Cache {
   constructor(srcFname, folder) {
     this.folder = folder;
     this.file = _ensureFile(srcFname, folder);
-    let cacheList = JSON.parse(gdFile.getBlob().getDataAsString());
+    let cacheList = JSON.parse(this.file.getBlob().getDataAsString());
     this.cache = _listToIdDict(cacheList);
   }
   save(rDocList) {
