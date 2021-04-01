@@ -1,3 +1,6 @@
+// 50MB = 50 * 1024*1024 = 52428800
+// (apparently a ReMarkable limitation)
+const rMbUploadLimit = 52428800;
 const rCacheFname = 'RmCache.json';
 
 const rDeviceTokenKey = "__REMARKABLE_DEVICE_TOKEN__";
