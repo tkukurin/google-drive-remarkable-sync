@@ -56,7 +56,7 @@ function _ensureFile(fname, folder) {
     return iter.next();
   } else {
     return DriveApp
-      .createFile(srcFname, JSON.stringify([]))
+      .createFile(fname, JSON.stringify([]))
       .moveTo(folder);
   }
 }
