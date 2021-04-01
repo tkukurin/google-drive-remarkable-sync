@@ -352,7 +352,7 @@ class Synchronizer {
           ? DriveApp.getFolderById(gdNewParentId)
           : this.cacheInfo.folder;
 
-        let gdOldParentId = this.UUIDToGdId[cachedDoc.Parent];
+        let gdOldParentId = cachedDoc ? this.UUIDToGdId[cachedDoc.Parent] : null;
         let gdOldParentFolder = gdOldParentId
           ? DriveApp.getFolderById(gdOldParentId)
           : gdNewParentFolder;
@@ -398,7 +398,9 @@ class Synchronizer {
       if (["2way", "2way-full"].includes(this.syncMode)) {
         Logger.log('Downloading updates from ReMarkable.');
         // 2way-full will also backup RM files not on GDrive
-        let rDocList = this.syncMode === "2way-full" ? this.rDocList : rDescIdsList;
+        let rDocList = this.syncMode === "2way-full"
+          ? this.rDocList
+          : this.rDocList.filter( rdoc => rDescIdsList.includes(rdoc.ID));
         try {
           let updated = this.downloadUpdates(rDocList)
           this.cacheInfo.save(rDocList);
