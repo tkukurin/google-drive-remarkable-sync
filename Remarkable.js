@@ -1,4 +1,12 @@
-AUTH_HOST = "https://webapp-production-dot-remarkable-production.appspot.com";
+// cf. https://github.com/juruen/rmapi/issues/177
+const rAuthHost = "https://webapp-production-dot-remarkable-production.appspot.com";
+const rDiscoveryStorageHost = "https://service-manager-production-dot-remarkable-production.appspot.com";
+
+function stripExtension(fname) {
+  let last = fname.lastIndexOf('.');
+  if (last === -1) return fname;
+  return fname.substr(0, last);
+}
 
 class RemarkableAPI {
 
@@ -15,8 +23,8 @@ class RemarkableAPI {
     else {
       Logger.log("Using existing Remarkable device id..");
       this.deviceId = deviceId;
-    }    
-    
+    }
+
     if (deviceToken === null) {
       Logger.log("Requesting new Remarkable device token from one time code..");
       this.deviceToken = this.constructor._getDeviceToken(this.deviceId, oneTimeCode);
@@ -25,7 +33,7 @@ class RemarkableAPI {
       Logger.log("Using existing Remarkable device token..");
       this.deviceToken = deviceToken;
     }
-    
+
     this.userToken = this.constructor._getUserToken(this.deviceToken);
     this.storageHost = this.constructor._getStorageHost(this.userToken);
   }
@@ -45,7 +53,7 @@ class RemarkableAPI {
       'payload': JSON.stringify(data)
     };
     // https://developers.google.com/apps-script/reference/url-fetch/url-fetch-app
-    let response = UrlFetchApp.fetch(`${AUTH_HOST}/token/json/2/device/new`, options);
+    let response = UrlFetchApp.fetch(`${rAuthHost}/token/json/2/device/new`, options);
     let deviceToken = response.getContentText()
     //Logger.log(`Received device token: ${deviceToken}`);
     return deviceToken;
@@ -60,7 +68,7 @@ class RemarkableAPI {
         'Authorization': `Bearer ${deviceToken}`
       }
     };
-    let response = UrlFetchApp.fetch(`${AUTH_HOST}/token/json/2/user/new`, options);
+    let response = UrlFetchApp.fetch(`${rAuthHost}/token/json/2/user/new`, options);
     let userToken = response.getContentText()
     //Logger.log(`Received user Token: ${userToken}`);
     return userToken;
@@ -76,7 +84,7 @@ class RemarkableAPI {
         'Authorization': `Bearer ${userToken}`
       }
     };
-    let response = UrlFetchApp.fetch('https://service-manager-production-dot-remarkable-production.appspot.com/service/json/1/document-storage?environment=production&group=auth0%7C5a68dc51cb30df3877a1d7c4&apiVer=2', options);
+    let response = UrlFetchApp.fetch(`${rDiscoveryStorageHost}/service/json/1/document-storage?environment=production&group=auth0%7C5a68dc51cb30df3877a1d7c4&apiVer=2`, options);
     let text = response.getContentText()
     let data = JSON.parse(text);
     if (data["Status"] == "OK") {
@@ -87,7 +95,7 @@ class RemarkableAPI {
       return null;
     }
   }
-  
+
   // https://github.com/splitbrain/ReMarkableAPI/wiki/Storage
 
   listDocs(docUuid4 = null, withBlob = null) {
@@ -160,7 +168,7 @@ class RemarkableAPI {
     //let response = UrlFetchApp.getRequest(url, options);
 
     if (response.getResponseCode() != 200) {
-     throw "Blob upload failed."; 
+     throw "Blob upload failed.";
     }
   }
 
@@ -180,6 +188,23 @@ class RemarkableAPI {
     let text = response.getContentText()
     let res = JSON.parse(text);
     return res;
+  }
+
+  downloadBlob(doc) {
+    let blob = this._downloadBlob(doc["BlobURLGet"]);
+    let name = stripExtension(doc["VissibleName"]);
+    blob.setName(`${name}.bin`);
+    return blob;
+  }
+
+  _downloadBlob(url) {
+    let response = UrlFetchApp.fetch(url, {
+      'method': 'GET',
+      'headers': {
+        'Authorization': `Bearer ${this.userToken}`
+      },
+    });
+    return response.getBlob();
   }
 
   delete(data) {
