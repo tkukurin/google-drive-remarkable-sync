@@ -11,7 +11,7 @@ function stripExtension(fname) {
 class RemarkableAPI {
 
   constructor(deviceId = null, deviceToken = null, oneTimeCode = null) {
-    // oneTimeCode from ${AUTH_HOST}/connect/mobile
+    // oneTimeCode from https://my.remarkable.com/connect/mobile
     if (deviceToken === null && oneTimeCode === null) {
       throw "Need at least either device-token or one-time-code";
     }
@@ -37,7 +37,6 @@ class RemarkableAPI {
     this.userToken = this.constructor._getUserToken(this.deviceToken);
     this.storageHost = this.constructor._getStorageHost(this.userToken);
   }
-
 
   // https://github.com/splitbrain/ReMarkableAPI/wiki/Authentication
 
@@ -68,7 +67,7 @@ class RemarkableAPI {
         'Authorization': `Bearer ${deviceToken}`
       }
     };
-    let response = UrlFetchApp.fetch(`${rAuthHost}/token/json/2/user/new`, options);
+    let response = UrlFetchApp.fetch(`${rmAuthHost}/token/json/2/user/new`, options);
     let userToken = response.getContentText()
     //Logger.log(`Received user Token: ${userToken}`);
     return userToken;

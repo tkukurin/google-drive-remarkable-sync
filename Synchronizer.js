@@ -92,7 +92,7 @@ class Cache {
 
 /*  Main work here. Walks Google Drive then uploads
  folder and files to Remarkable cloud storage. Currently
- only uploads PDFs. There appears to be a limitation
+ only uploads PDFs/EPUBs. There appears to be a limitation
  with Remarkable that files must be less than 50MB so
  files greater than this size are filtered out.
 
@@ -111,12 +111,10 @@ forceUpdateFunc - Optional function of obj dictionaries, the first generated
                   from Google Drive, the second from Remarkable storage. The
                   function returns true/false and determines whether you
                   wish to bump up the version and force push.
-formats - Optional list of all the file type formats to look for and upload
-          defaults to just pdf, but epub has also been tested and works on device
 
 */
 class Synchronizer {
-  constructor(rOneTimeCode, gdFolderSearchParams, rRootFolderName, syncMode = "update", gdFolderSkipList = [], forceUpdateFunc = null, formats = [pdf]) {
+  constructor(rOneTimeCode, gdFolderSearchParams, rRootFolderName, syncMode = "update", gdFolderSkipList = [], forceUpdateFunc = null) {
 
     // try finding google folder by id first
     try {
@@ -132,7 +130,6 @@ class Synchronizer {
 
     this.cacheInfo = new Cache(rCacheFname, this.gdFolder);
     this.gdFolderSkipList = gdFolderSkipList;
-	this.formats = formats;
     this.forceUpdateFunc = forceUpdateFunc || ((r, s) => false);
     // we borrow terminology from https://freefilesync.org/manual.php?topic=synchronization-settings
     if (!availableModes.includes(syncMode)) {
@@ -164,7 +161,7 @@ class Synchronizer {
 
     // prep some common vars
     this.rDocList = this.rApiClient.listDocs(/*docUuid4=*/ null, /*withBlob=*/ true);
-    Logger.log(`Found ${this.rDocList.length} items in Remarkable Cloud`)
+    Logger.log(`Found ${this.rDocList.length} items in Remarkable Cloud`);
 
     // for debugging - dump doc list as json in root google drive folder
     //DriveApp.createFile('remarkableDocList.json', JSON.stringify(this.rDocList));
@@ -188,7 +185,7 @@ class Synchronizer {
         throw `Cannot find root file '${rRootFolderName}'`;
       }
     }
-    Logger.log(`Mapped '${rRootFolderName}' to ID '${this.rRootFolderId}'`)
+    Logger.log(`Mapped '${rRootFolderName}' to ID '${this.rRootFolderId}'`);
   }
 
   getUUID(gdId) {
@@ -294,17 +291,7 @@ class Synchronizer {
 
   _isSyncDocument(r) {
     let name = r["VissibleName"];
-    let isSyncExt = false;
-	
-	 for (const availableFormat of this.formats)
-	 {
-		if (name.endsWith(availableFormat))
-		{
-			isSyncExt = true;
-			break;
-		}				
-	 }
-	
+    let isSyncExt = name.endsWith("pdf") || name.endsWith("epub");
     return r["Type"] == "DocumentType" && isSyncExt;
   }
 
