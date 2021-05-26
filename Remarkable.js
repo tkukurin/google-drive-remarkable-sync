@@ -67,7 +67,7 @@ class RemarkableAPI {
         'Authorization': `Bearer ${deviceToken}`
       }
     };
-    let response = UrlFetchApp.fetch(`${rmAuthHost}/token/json/2/user/new`, options);
+    let response = UrlFetchApp.fetch(`${rAuthHost}/token/json/2/user/new`, options);
     let userToken = response.getContentText()
     //Logger.log(`Received user Token: ${userToken}`);
     return userToken;
